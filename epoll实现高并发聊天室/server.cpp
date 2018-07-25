@@ -2,10 +2,19 @@
 
 int main(int argc, char const *argv[])
 {
+    if (argc != 3) {
+        printf("Usage: %s <ip> <port>\n", argv[0]);
+        printf("default server ip: %s, port: %d\n", SERVER_IP, SERVER_PORT);
+    } else {
+        printf("server ip: %s, port: %s\n", argv[1], argv[2]);
+    }
+    
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = PF_INET;
-    serverAddr.sin_port = htons(SERVER_PORT);
-    serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+    serverAddr.sin_port = 
+        argc == 3 ? htons((uint16_t)atoi(argv[2])) : htons(SERVER_PORT);
+    serverAddr.sin_addr.s_addr = 
+        argc == 3 ? inet_addr(argv[1]) : inet_addr(SERVER_IP);
 
     // 服务端创建监听 socket
     int listener = socket(PF_INET, SOCK_STREAM, 0);
@@ -15,11 +24,12 @@ int main(int argc, char const *argv[])
     // 将服务端地址与监听 socket 绑定
     int ret = bind(listener, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
     CHECK_ERR(ret, "bind error");
+    printf("bind success\n");
 
     // 开始监听
     ret = listen(listener, 5);
     CHECK_ERR(ret, "listen error");
-    printf("start to listen： %s\n", SERVER_IP);
+    printf("start to listen\n");
 
     // 在内核中创建事件表
     int epfd = epoll_create(EPOLL_SIZE);

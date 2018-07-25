@@ -1,7 +1,6 @@
 #ifndef __UTILITY__
 #define __UTILITY__
 
-//#include <iostream>
 #include <list>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -15,8 +14,6 @@
 #include <string.h>
 #include <unistd.h>
 
-//using namespace std;
-
 // 服务端存储所有在线用户 socket, 便于广播信息
 std::list<int> clients_list;
 
@@ -29,7 +26,7 @@ std::list<int> clients_list;
 #define BUF_SIZE 0xffff
 
 #define SERVER_WELCOME "Welcome you join to the chat room! Your chat ID is: Client #%d\n"
-#define SERVER_MESSAGE "\nClientID %d say >> %s"
+#define SERVER_MESSAGE "\nClientID #%d say >> %s"
 #define EXIT "exit"
 #define CAUTION "\nThere is only one in the chat room!\n"
 

@@ -2,11 +2,19 @@
 
 int main(int argc, char const *argv[])
 {
-    printf("server ip: %s\n", SERVER_IP);
+    if (argc != 3) {
+        printf("Usage: %s <ip> <port>\n", argv[0]);
+        printf("default connect to %s:%d\n", SERVER_IP, SERVER_PORT);
+    } else {
+        printf("connect to %s:%s\n", argv[1], argv[2]);
+    }
+
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = PF_INET;
-    serverAddr.sin_port = htons(SERVER_PORT);
-    serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+    serverAddr.sin_port = 
+        argc == 3 ? htons((uint16_t)atoi(argv[2])) : htons(SERVER_PORT);
+    serverAddr.sin_addr.s_addr = 
+        argc == 3 ? inet_addr(argv[1]) : inet_addr(SERVER_IP);
 
     // 创建 socket
     int sock = socket(PF_INET, SOCK_STREAM, 0);
@@ -41,6 +49,7 @@ int main(int argc, char const *argv[])
         // 子进程负责写入管道, 因此先关闭读端
         close(pipe_fd[0]);
         printf("You can input " EXIT " to exit the chat room\n");
+        PRINT_HINT();
 
         while (isClientwork) {
             memset(message, 0, BUF_SIZE);
