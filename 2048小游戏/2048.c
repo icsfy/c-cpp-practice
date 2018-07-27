@@ -1,32 +1,4 @@
-#include <stdlib.h>
-#include <time.h>
-#include <ncurses.h>
-
-/* 每一格的宽和高 */
-#define WIDTH 6
-#define HEIGHT 4
-// #define WIDTH 4
-// #define HEIGHT 2
-
-/* 游戏中随机出现数字2和4, 定义数字2出现概率百分比 */
-#define PERCENT_2   90
-
-/* 游戏按键控制上下左右, 重新开始和退出 */
-#define GAME_KEY_LEFT       'a'
-#define GAME_KEY_RIGHT      'd'
-#define GAME_KEY_UP         'w'
-#define GAME_KEY_DOWN       's'
-#define GAME_KEY_RESTART    'r'
-#define GAME_KEY_EXIT       'q'
-
-/* 游戏中的一些提示文字 */
-#define GAME_TEXT_TITLE     " --- 2048 ---"
-#define GAME_TEXT_SCORE     "score: %d"
-#define GAME_TEXT_TOPSCORE  "Top: %d"
-#define GAME_TEXT_NOTMOVE   "!cannot move this way!"
-#define GAME_TEXT_OVER      " GAME OVER!"
-#define GAME_TEXT_RESTART   "'r': Restart game"
-#define GAME_TEXT_EXIT      "'q': Quit game"
+#include "2048.h"
 
 /* 游戏结束标志 */
 int gameoverflag;
@@ -34,28 +6,9 @@ int gameoverflag;
 /* 游戏分数 */
 int score, topscore;
 
-/* 输出方框边界 */
-void board(WINDOW *win, int starty, int startx, int lines, int cols,
-           int tile_width, int tile_height);
-
-/* 检查是否能继续游戏 */
-void check2048(int **arr, int n);
-
-/* 合并数字 */
-int moveleft(int **arr, int n);
-int moveright(int **arr, int n);
-int moveup(int **arr, int n);
-int movedown(int **arr, int n);
-
-/* 生成随机数字2或4 */
-void update2048(int **arr, int n, int count);
-
-/* 刷新游戏界面 */
-void print2048(int **arr, int n);
-
 int main(int argc, char const *argv[])
 {
-    int **arr, n = 4, ch, res;
+    int **arr, n = 4, ch, moved;
     if (argc == 2)
         n = atoi(argv[1]);
     topscore = 0;
@@ -79,31 +32,32 @@ LABEL_RESTART:
         {
             case KEY_LEFT:
             case GAME_KEY_LEFT:
-                res = moveleft(arr, n);
+                moved = move_left_right(arr, n, GAME_KEY_LEFT);
                 break;
             case KEY_RIGHT:
             case GAME_KEY_RIGHT:
-                res = moveright(arr, n);
+                moved = move_left_right(arr, n, GAME_KEY_RIGHT);
                 break;
             case KEY_UP:
             case GAME_KEY_UP:
-                res = moveup(arr, n);
+                moved = move_up_down(arr, n, GAME_KEY_UP);
                 break;
             case KEY_DOWN:
             case GAME_KEY_DOWN:
-                res = movedown(arr, n);
+                moved = move_up_down(arr, n, GAME_KEY_DOWN);
                 break;
             case GAME_KEY_RESTART:
                 goto FREE_RESOURCE;
                 break;
         }
-        if (res) {
+        /* 移动了则更新, 没移动则提示不能移动 */
+        if (moved) {
             update2048(arr, n, 1);
             check2048(arr, n);
             print2048(arr, n);
         } else if (!gameoverflag) {
             attron(A_BLINK);
-            mvprintw(1, 1, GAME_TEXT_NOTMOVE);
+            mvprintw(0, (COLS - sizeof(GAME_TEXT_NOTMOVE)) / 2, GAME_TEXT_NOTMOVE);
             attroff(A_BLINK);
         }
     }
@@ -113,11 +67,13 @@ FREE_RESOURCE:
     for (int i = 0; i < n; ++i)
         free(arr[i]);
     free(arr);
-    if (ch == 'r')
+    /* 判断是否重新开始游戏 */
+    if (ch == GAME_KEY_RESTART)
         goto LABEL_RESTART;
     return 0;
 }
 
+/* 输出方框边界 */
 void board(WINDOW *win, int starty, int startx, int lines, int cols,
            int tile_width, int tile_height)
 {
@@ -150,6 +106,7 @@ void board(WINDOW *win, int starty, int startx, int lines, int cols,
     wrefresh(win);
 }
 
+/* 检查是否能继续游戏 设置游戏结束标志位 */
 void check2048(int **arr, int n)
 {
     int x, y;
@@ -163,165 +120,212 @@ void check2048(int **arr, int n)
     gameoverflag = 1;
 }
 
+/* 随机生成数字2或4, count指定生成数字个数 */
 void update2048(int **arr, int n, int count)
 {
-    if (gameoverflag) return;
-    int x, y, num, flag;
-    while (count--)
-    {
-        flag = 0;
-        for (x = 0; x < n && !flag; ++x)
-            for (y = 0; y < n && !flag; ++y)
-                if (arr[x][y] == 0)
-                    flag = 1;
-        num = rand() % 100 < PERCENT_2 ? 2 : 4;
-        while (flag)
-        {
-            x = rand() % n;
-            y = rand() % n;
+    int x, y, num, i, position;
+    num = 0;
+    /* 获取空格数 */
+    for (x = 0; x < n; ++x)
+        for (y = 0; y < n; ++y)
             if (arr[x][y] == 0)
-            {
-                arr[x][y] = num;
-                flag = 0;
-            }
-        }
-    }
-}
-
-int moveleft(int **arr, int n)
-{
-    int x, y, z;
-    int moved = 1, res = 0;
-    while (moved)
+                num++;
+    while (count > 0 && num > 0)
     {
-        moved = 0;
-        for (y = 0; y < n; ++y)
-        {
-            for (x = n - 1; x > 0; --x)
-            {
-                if (arr[x][y] != 0 && arr[x][y] == arr[x-1][y])
-                {
-                    arr[x-1][y] += arr[x][y];
-                    score += arr[x][y];
-                    arr[x][y] = 0;
-                    moved = 1;
-                    res = 1;
-                }
-                if (arr[x-1][y] == 0 && arr[x][y] != 0)
-                {
-                    arr[x-1][y] = arr[x][y];
-                    arr[x][y] = 0;
-                    moved = 1;
-                    res = 1;
-                }
-            }
-        }
+        /* 数字放置位置 */
+        position = rand() % num;
+        i = 0;
+        for (x = 0; x < n && i <= position; ++x)
+            for (y = 0; y < n && i <= position; ++y)
+                if (arr[x][y] == 0)
+                    if (i++ == position)
+                        arr[x][y] = rand() % 100 < PERCENT_2 ? 2 : 4;
+        count--;
+        num--;
     }
-    return res;
 }
 
-int moveright(int **arr, int n)
+/* 左右移动合并 */
+int move_left_right(int **arr, int n, int direction)
 {
-    int x, y, z;
-    int moved = 1, res = 0;
-    while (moved)
+    int x, y, k, delta;
+    int moved = 0;
+    /* 一行一行处理 */
+    for (y = 0; y < n; ++y)
     {
-        moved = 0;
-        for (y = 0; y < n; ++y)
+        if (direction == GAME_KEY_LEFT) {
+            /* 向左滑动 从左向右处理 */
+            k = 0;  x = 1;  delta = 1;
+        } else if (direction == GAME_KEY_RIGHT) {
+            /* 向右滑动 从右向左处理 */
+            k = n - 1;  x = n - 2;  delta = -1;
+        }
+        while ((direction == GAME_KEY_LEFT && x < n) ||
+                (direction == GAME_KEY_RIGHT && x >= 0))
         {
-            for (x = n - 2; x >= 0; --x)
-            {
-                if (arr[x][y] != 0 && arr[x][y] == arr[x+1][y])
-                {
-                    arr[x+1][y] += arr[x][y];
-                    score += arr[x][y];
-                    arr[x][y] = 0;
+            if (arr[x][y] != 0) {   /* 当前格不为空 */
+                if (arr[k][y] == 0) {       /* 处理格为空 */
+                    arr[k][y] = arr[x][y];  // 滑至处理格
+                    arr[x][y] = 0;          // 当前格置空
+                    x += delta;             // 当前格指向下一格
                     moved = 1;
-                    res = 1;
+                } else {                    /* 处理格不为空 */
+                    if (arr[x][y] == arr[k][y]) {   /* 可以合并 */
+                        arr[k][y] += arr[x][y];     // 合并当前格
+                        arr[x][y] = 0;              // 当前格置空
+                        score += arr[k][y];         // 分数加上合并值
+                        x += delta;                 // 当前格指向下一格
+                        k += delta;                 // 处理格指向下一格
+                        moved = 1;
+                    } else {                        /* 不能合并 */
+                        k += delta;                 // 处理格指向下一格
+                        if (k == x)                 // 若处理格指向当前格
+                            x += delta;             // 则当前格指向下一格
+                    }
                 }
-                if (arr[x+1][y] == 0 && arr[x][y] != 0)
-                {
-                    arr[x+1][y] = arr[x][y];
-                    arr[x][y] = 0;
-                    moved = 1;
-                    res = 1;
-                }
+            } else {                /* 当前格为空 */
+                x += delta;         // 当前格指向下一格
             }
         }
     }
-    return res;
+    return moved;
 }
 
-int moveup(int **arr, int n)
+/* 上下移动合并 */
+int move_up_down(int **arr, int n, int direction)
 {
-    int x, y, z;
-    int moved = 1, res = 0;
-    while (moved)
+    int x, y, k, delta;
+    int moved = 0;
+    /* 一列一列处理 */
+    for (x = 0; x < n; ++x)
     {
-        moved = 0;
-        for (x = 0; x < n; ++x)
+        if (direction == GAME_KEY_UP) {
+            /* 向上滑动 从上向下处理 */
+            k = 0;  y = 1;  delta = 1;
+        } else if (direction == GAME_KEY_DOWN) {
+            /* 向下滑动 从下向上处理 */
+            k = n - 1;  y = n - 2;  delta = -1;
+        }
+        while ((direction == GAME_KEY_UP && y < n) ||
+                (direction == GAME_KEY_DOWN && y >= 0))
         {
-            for (y = n - 1; y > 0; --y)
-            {
-                if (arr[x][y] != 0 && arr[x][y] == arr[x][y-1])
-                {
-                    arr[x][y-1] += arr[x][y];
-                    score += arr[x][y];
-                    arr[x][y] = 0;
+            if (arr[x][y] != 0) {   /* 当前格不为空 */
+                if (arr[x][k] == 0) {       /* 处理格为空 */
+                    arr[x][k] = arr[x][y];  // 滑至处理格
+                    arr[x][y] = 0;          // 当前格置空
+                    y += delta;             // 当前格指向下一格
                     moved = 1;
-                    res = 1;
+                } else {                    /* 处理格不为空 */
+                    if (arr[x][y] == arr[x][k]) {   /* 可以合并 */
+                        arr[x][k] += arr[x][y];     // 合并当前格
+                        arr[x][y] = 0;              // 当前格置空
+                        score += arr[x][k];         // 分数加上合并值
+                        y += delta;                 // 当前格指向下一格
+                        k += delta;                 // 处理格指向下一格
+                        moved = 1;
+                    } else {                        /* 不能合并 */
+                        k += delta;                 // 处理格指向下一格
+                        if (k == y)                 // 若处理格指向当前格
+                            y += delta;             // 则当前格指向下一格
+                    }
                 }
-                if (arr[x][y-1] == 0 && arr[x][y] != 0)
-                {
-                    arr[x][y-1] = arr[x][y];
-                    arr[x][y] = 0;
-                    moved = 1;
-                    res = 1;
-                }
+            } else {                /* 当前格为空 */
+                y += delta;         // 当前格指向下一格
             }
         }
     }
-    return res;
+    return moved;
 }
 
-int movedown(int **arr, int n)
-{
-    int x, y, z;
-    int moved = 1, res = 0;;
-    while (moved)
-    {
-        moved = 0;
-        for (x = 0; x < n; ++x)
-        {
-            for (y = n - 2; y >= 0; --y)
-            {
-                if (arr[x][y] != 0 && arr[x][y] == arr[x][y+1])
-                {
-                    arr[x][y+1] += arr[x][y];
-                    score += arr[x][y];
-                    arr[x][y] = 0;
-                    moved = 1;
-                    res = 1;
-                }
-                if (arr[x][y+1] == 0 && arr[x][y] != 0)
-                {
-                    arr[x][y+1] = arr[x][y];
-                    arr[x][y] = 0;
-                    moved = 1;
-                    res = 1;
-                }
-            }
-        }
-    }
-    return res;
-}
+// /* 左右移动合并 */
+// int move_left_right(int **arr, int n, int direction)
+// {
+//     int x, y, z;
+//     int moved = 1, res = 0;
+//     while (moved)
+//     {
+//         moved = 0;
+//         for (y = 0; y < n; ++y)
+//         {
+//             for (x = n - 1; x > 0; --x)
+//             {
+//                 if (arr[x][y] != 0 && arr[x][y] == arr[x-1][y])
+//                 {
+//                     arr[x-1][y] += arr[x][y];
+//                     score += arr[x][y];
+//                     arr[x][y] = 0;
+//                     moved = 1;
+//                     res = 1;
+//                 }
+//                 if (direction == GAME_KEY_LEFT &&
+//                     arr[x-1][y] == 0 && arr[x][y] != 0)
+//                 {
+//                     arr[x-1][y] = arr[x][y];
+//                     arr[x][y] = 0;
+//                     moved = 1;
+//                     res = 1;
+//                 }
+//                 if (direction == GAME_KEY_RIGHT &&
+//                     arr[x-1][y] != 0 && arr[x][y] == 0)
+//                 {
+//                     arr[x][y] = arr[x-1][y];
+//                     arr[x-1][y] = 0;
+//                     moved = 1;
+//                     res = 1;
+//                 }
+//             }
+//         }
+//     }
+//     return res;
+// }
 
+// /* 上下移动合并 */
+// int move_up_down(int **arr, int n, int direction)
+// {
+//     int x, y, z;
+//     int moved = 1, res = 0;
+//     while (moved)
+//     {
+//         moved = 0;
+//         for (x = 0; x < n; ++x)
+//         {
+//             for (y = n - 1; y > 0; --y)
+//             {
+//                 if (arr[x][y] != 0 && arr[x][y] == arr[x][y-1])
+//                 {
+//                     arr[x][y-1] += arr[x][y];
+//                     score += arr[x][y];
+//                     arr[x][y] = 0;
+//                     moved = 1;
+//                     res = 1;
+//                 }
+//                 if (direction == GAME_KEY_UP &&
+//                     arr[x][y-1] == 0 && arr[x][y] != 0)
+//                 {
+//                     arr[x][y-1] = arr[x][y];
+//                     arr[x][y] = 0;
+//                     moved = 1;
+//                     res = 1;
+//                 }
+//                 if (direction == GAME_KEY_DOWN &&
+//                     arr[x][y-1] != 0 && arr[x][y] == 0)
+//                 {
+//                     arr[x][y] = arr[x][y-1];
+//                     arr[x][y-1] = 0;
+//                     moved = 1;
+//                     res = 1;
+//                 }
+//             }
+//         }
+//     }
+//     return res;
+// }
+
+/* 刷新游戏界面 */
 void print2048(int **arr, int n)
 {
-    int i, j, deltax, deltay;
+    int i, j, deltax, deltay, fix;
     int startx, starty;
-    int len;
-    char strscore[sizeof(GAME_TEXT_SCORE)+10];
 
     starty = (LINES - n * HEIGHT) / 2;
     startx = (COLS - n * WIDTH) / 2;
@@ -329,21 +333,23 @@ void print2048(int **arr, int n)
     board(stdscr, starty, startx, n, n, WIDTH, HEIGHT);
     deltay = HEIGHT / 2;
     deltax = WIDTH / 2;
-    mvprintw(LINES - 2, startx, GAME_TEXT_RESTART);
-    mvprintw(LINES - 1, startx, GAME_TEXT_EXIT);
+    mvprintw(starty + n * HEIGHT - 2, startx + n * WIDTH + 1, GAME_TEXT_RESTART);
+    mvprintw(starty + n * HEIGHT - 1, startx + n * WIDTH + 1, GAME_TEXT_EXIT);
     attron(A_BOLD);
     mvprintw(starty - 2, (COLS - sizeof(GAME_TEXT_TITLE)) / 2, GAME_TEXT_TITLE);
-    len = sprintf(strscore, GAME_TEXT_SCORE, score);
-    mvprintw(starty - 1, COLS - startx - len, strscore);
+    mvprintw(starty, startx + n * WIDTH + 1, GAME_TEXT_SCORE, score);
     topscore = score > topscore ? score : topscore;
     if (topscore > 0)
-        mvprintw(starty - 1, startx, GAME_TEXT_TOPSCORE, topscore);
+        mvprintw(starty + 1, startx + n * WIDTH + 1, GAME_TEXT_TOPSCORE, topscore);
     for (i = 0; i < n; ++i)
         for (j = 0; j < n; ++j)
-            if (arr[i][j] != 0)
+            if (arr[i][j] != 0) {
+                fix = arr[i][j] > 1000 ? 2 : arr[i][j] > 100 ? 1 : 0;
                 mvprintw(starty + j * HEIGHT + deltay,
-                    startx + i * WIDTH + deltax,
+                    startx + i * WIDTH + deltax - fix,
                     "%d", arr[i][j]);
+            }
+    /* 游戏结束 */
     if (gameoverflag) {
         attron(A_BLINK);
         mvprintw(starty + n * HEIGHT + 1, (COLS - sizeof(GAME_TEXT_OVER)) / 2, GAME_TEXT_OVER);
